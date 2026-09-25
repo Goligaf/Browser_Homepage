@@ -110,9 +110,8 @@
             border-radius: 12px;
             background: rgba(255,255,255,0.1);
             backdrop-filter: blur(10px);
-            padding: 6px;
+            object-fit: cover; /* Заполняет весь квадрат */
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            object-fit: cover;
         }
 
         .pinned-site span {
@@ -731,6 +730,31 @@
             height: 50px !important;
             font-size: 1.3rem !important;
         }
+            .invisible-btn-bg {
+        right: 15px !important;
+        bottom: 25px !important; /* Больше отступа снизу */
+        width: 55px !important;
+        height: 55px !important;
+        font-size: 1.4rem !important;
+        z-index: 1000 !important; /* Выше всех элементов */
+    }
+    
+    .invisible-btn-settings {
+        right: 80px !important;
+        bottom: 25px !important;
+        width: 55px !important;
+        height: 55px !important;
+        font-size: 1.4rem !important;
+        z-index: 1000 !important;
+    }
+    
+    /* Исправление: когда скрыты - прозрачность 0, но клик работает */
+    .invisible-btn-bg.hidden-btn,
+    .invisible-btn-settings.hidden-btn {
+        opacity: 0 !important; 
+        pointer-events: auto !important; 
+    }
+        
     }
 
 /* Жёсткий фикс горизонтального скролла */
@@ -796,34 +820,20 @@ body {
     scrollbar-width: none !important;
 }
 
-/* Фикс для мобильных - кнопки должны быть доступны */
-@media (max-width: 480px) {
-    .invisible-btn-bg {
-        right: 15px !important;
-        bottom: 25px !important; /* Больше отступа снизу */
-        width: 55px !important;
-        height: 55px !important;
-        font-size: 1.4rem !important;
-        z-index: 1000 !important; /* Выше всех элементов */
-    }
-    
-    .invisible-btn-settings {
-        right: 80px !important;
-        bottom: 25px !important;
-        width: 55px !important;
-        height: 55px !important;
-        font-size: 1.4rem !important;
-        z-index: 1000 !important;
-    }
-    
-    /* Даже когда кнопки "скрыты", они должны оставаться кликабельными */
-    .invisible-btn-bg.hidden-btn,
-    .invisible-btn-settings.hidden-btn {
-        opacity: 0.3 !important; /* Полупрозрачные, но видимые */
-        pointer-events: auto !important; /* Всегда кликабельны */
-    }
+.btn-move {
+    background: rgba(255,255,255,0.15);
+    padding: 5px 8px;
+    border: none;
+    border-radius: 5px;
+    color: white;
+    cursor: pointer;
+    font-size: 0.9rem;
 }
-    
+
+.btn-move:hover {
+    background: rgba(255,255,255,0.25);
+}
+        
     </style>
 </head>
 <body>
@@ -1072,7 +1082,17 @@ body {
                 <input type="text" id="new-site-url" class="modal-input" placeholder="https://example.com">
                 <input type="text" id="new-site-name" class="modal-input" placeholder="Название (необязательно)">
                 <input type="text" id="new-site-icon" class="modal-input" placeholder="URL иконки (необязательно)">
+                <p class="hint-text">💡 Рекомендуемый размер иконки не должен привышать: 512×512 px. Поддерживаются PNG, JPG, GIF.</p>
                 <button class="modal-btn success" onclick="addPinnedSite()"> Добавить сайт</button>
+                                <!-- Превью обрезки иконки -->
+                <div id="icon-crop-preview" style="display:none; margin-top: 15px; text-align: center;">
+                    <p class="hint-text">Выбери область для иконки:</p>
+                    <canvas id="crop-canvas" width="200" height="200" style="border: 2px solid #007aff; border-radius: 12px; max-width: 100%; cursor: crosshair;"></canvas>
+                    <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: center;">
+                        <button class="modal-btn" onclick="confirmCrop()" style="width: auto; padding: 8px 20px;">✅ Применить</button>
+                        <button class="modal-btn" onclick="cancelCrop()" style="width: auto; padding: 8px 20px; background: rgba(255,255,255,0.1);">❌ Отмена</button>
+                    </div>
+                </div>
                 
                 <label class="setting-label" style="margin-top: 15px;">Положение блока сайтов:</label>
                 <div class="select-row" id="sites-vertical-pos">
@@ -1792,8 +1812,8 @@ body {
                     a.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
                     
                     a.innerHTML = `
-                        <img src="${iconUrl}" alt="${site.name || 'Site'}" 
-                             style="border-radius: ${borderRadius}px; background: ${transparentBg ? 'transparent' : 'rgba(255,255,255,0.1)'}; padding: ${transparentBg ? '0' : '6px'};">
+                        <img src="${iconUrl}" alt="${site.name || 'Site'}"
+                             style="border-radius: ${borderRadius}px;">
                         ${showName ? `<span>${site.name || new URL(site.url).hostname}</span>` : ''}
                     `;
                     pinnedSitesContainer.appendChild(a);
@@ -1810,15 +1830,17 @@ body {
                         selectSiteForOffset(index);
                     };
                     
-                    div.innerHTML = `
-                        <img src="${site.icon || getFavicon(site.url)}" alt="${site.name || 'Site'}">
-                        <span class="pinned-site-item-info">${site.name || site.url}</span>
-                        <div class="pinned-site-item-actions">
-                            <button class="btn-hide" onclick="toggleSiteVisibility(${index})">${site.hidden ? '️' : '🙈'}</button>
-                            <button class="btn-edit" onclick="editPinnedSite(${index})">✏️</button>
-                            <button class="btn-delete" onclick="deletePinnedSite(${index})">🗑️</button>
-                        </div>
-                    `;
+                div.innerHTML = `
+                    <img src="${site.icon || getFavicon(site.url)}" alt="${site.name || 'Site'}">
+                    <span class="pinned-site-item-info">${site.name || site.url}</span>
+                    <div class="pinned-site-item-actions">
+                        <button class="btn-move" onclick="moveSite(${index}, -1)" title="Вверх">️</button>
+                        <button class="btn-move" onclick="moveSite(${index}, 1)" title="Вниз">⬇️</button>
+                        <button class="btn-hide" onclick="toggleSiteVisibility(${index})">${site.hidden ? '️' : '🙈'}</button>
+                        <button class="btn-edit" onclick="editPinnedSite(${index})">✏️</button>
+                        <button class="btn-delete" onclick="deletePinnedSite(${index})">🗑️</button>
+                    </div>
+                `;
                     listContainer.appendChild(div);
                 }
             });
@@ -1828,7 +1850,162 @@ body {
             }
         };
 
-        const addPinnedSite = () => {
+                   // === CROP SYSTEM ===
+            let cropImage = null;
+            let cropOffsetX = 0, cropOffsetY = 0;
+            let isDragging = false;
+            let dragStartX, dragStartY;
+            
+            // Обработчик загрузки файла иконки
+            document.getElementById('file-input').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    const img = new Image();
+                    img.onload = function() {
+                        cropImage = img;
+                        showCropPreview(img);
+                    };
+                    img.src = ev.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+            
+            function showCropPreview(img) {
+                const canvas = document.getElementById('crop-canvas');
+                const ctx = canvas.getContext('2d');
+                const preview = document.getElementById('icon-crop-preview');
+                
+                preview.style.display = 'block';
+                cropOffsetX = 0;
+                cropOffsetY = 0;
+                
+                drawCropCanvas();
+                
+                // Обработчики перетаскивания
+                canvas.onmousedown = (e) => {
+                    isDragging = true;
+                    dragStartX = e.clientX - cropOffsetX;
+                    dragStartY = e.clientY - cropOffsetY;
+                };
+                
+                canvas.onmousemove = (e) => {
+                    if (!isDragging) return;
+                    cropOffsetX = e.clientX - dragStartX;
+                    cropOffsetY = e.clientY - dragStartY;
+                    
+                    // Ограничиваем перемещение
+                    const scale = Math.min(200 / img.width, 200 / img.height);
+                    const w = img.width * scale;
+                    const h = img.height * scale;
+                    const maxX = (200 - w) / 2;
+                    const maxY = (200 - h) / 2;
+                    
+                    cropOffsetX = Math.max(-maxX, Math.min(maxX, cropOffsetX));
+                    cropOffsetY = Math.max(-maxY, Math.min(maxY, cropOffsetY));
+                    
+                    drawCropCanvas();
+                };
+                
+                canvas.onmouseup = () => isDragging = false;
+                canvas.onmouseleave = () => isDragging = false;
+                
+                // Touch support
+                canvas.ontouchstart = (e) => {
+                    isDragging = true;
+                    const touch = e.touches[0];
+                    dragStartX = touch.clientX - cropOffsetX;
+                    dragStartY = touch.clientY - cropOffsetY;
+                };
+                
+                canvas.ontouchmove = (e) => {
+                    if (!isDragging) return;
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    cropOffsetX = touch.clientX - dragStartX;
+                    cropOffsetY = touch.clientY - dragStartY;
+                    
+                    const scale = Math.min(200 / img.width, 200 / img.height);
+                    const w = img.width * scale;
+                    const h = img.height * scale;
+                    const maxX = (200 - w) / 2;
+                    const maxY = (200 - h) / 2;
+                    
+                    cropOffsetX = Math.max(-maxX, Math.min(maxX, cropOffsetX));
+                    cropOffsetY = Math.max(-maxY, Math.min(maxY, cropOffsetY));
+                    
+                    drawCropCanvas();
+                };
+                
+                canvas.ontouchend = () => isDragging = false;
+            }
+            
+            function drawCropCanvas() {
+                const canvas = document.getElementById('crop-canvas');
+                const ctx = canvas.getContext('2d');
+                
+                ctx.clearRect(0, 0, 200, 200);
+                
+                const scale = Math.min(200 / cropImage.width, 200 / cropImage.height);
+                const w = cropImage.width * scale;
+                const h = cropImage.height * scale;
+                const baseX = (200 - w) / 2;
+                const baseY = (200 - h) / 2;
+                
+                ctx.drawImage(cropImage, baseX + cropOffsetX, baseY + cropOffsetY, w, h);
+                
+                // Рамка обрезки (центральный квадрат 100x100)
+                const cropBoxSize = 100;
+                const cropX = (200 - cropBoxSize) / 2;
+                const cropY = (200 - cropBoxSize) / 2;
+                
+                // Затемнение вне рамки
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(0, 0, 200, cropY);
+                ctx.fillRect(0, cropY + cropBoxSize, 200, 200 - cropY - cropBoxSize);
+                ctx.fillRect(0, cropY, cropX, cropBoxSize);
+                ctx.fillRect(cropX + cropBoxSize, cropY, 200 - cropX - cropBoxSize, cropBoxSize);
+                
+                // Рамка
+                ctx.strokeStyle = '#007aff';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(cropX, cropY, cropBoxSize, cropBoxSize);
+            }
+            
+            function confirmCrop() {
+                const canvas = document.getElementById('crop-canvas');
+                const ctx = canvas.getContext('2d');
+                
+                const cropBoxSize = 100;
+                const cropX = (200 - cropBoxSize) / 2;
+                const cropY = (200 - cropBoxSize) / 2;
+                
+                const imageData = ctx.getImageData(cropX, cropY, cropBoxSize, cropBoxSize);
+                
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = 512;
+                tempCanvas.height = 512;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.putImageData(imageData, 0, 0);
+                
+                const croppedDataUrl = tempCanvas.toDataURL('image/png', 0.9);
+                
+                // Сохраняем обрезанную иконку во временную переменную
+                window.croppedIconData = croppedDataUrl;
+                
+                cancelCrop();
+                alert('Иконка обрезана! Теперь нажми "Добавить сайт" или используй её в редактировании.');
+            }
+            
+            function cancelCrop() {
+                document.getElementById('icon-crop-preview').style.display = 'none';
+                cropImage = null;
+                isDragging = false;
+            }
+        
+        const addPinnedSite = async () => { 
             const urlInput = document.getElementById('new-site-url');
             const nameInput = document.getElementById('new-site-name');
             const iconInput = document.getElementById('new-site-icon');
@@ -1846,7 +2023,59 @@ body {
             }
 
             const sites = getPinnedSites();
-            sites.push({ url, name, icon, hidden: false, showName: true, borderRadius: 12, transparentBg: false, offsetX: 0, offsetY: 0 });
+// Функция сжатия иконки
+const compressIcon = (dataUrl, maxSize = 512) => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            if (img.width <= maxSize && img.height <= maxSize) {
+                resolve(dataUrl); // Если меньше 512 - не трогаем
+                return;
+            }
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            // Вычисляем новые размеры, сохраняя пропорции
+            if (width > height) {
+                if (width > maxSize) {
+                    height *= maxSize / width;
+                    width = maxSize;
+                }
+            } else {
+                if (height > maxSize) {
+                    width *= maxSize / height;
+                    height = maxSize;
+                }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/png', 0.9)); // Качество 0.9
+        };
+        img.src = dataUrl;
+    });
+};
+
+// Использование при добавлении сайта
+let finalIcon = icon;
+if (icon && icon.startsWith('data:image')) {
+    finalIcon = await compressIcon(icon);
+}
+
+sites.push({ 
+    url, 
+    name, 
+    icon: finalIcon, 
+    hidden: false, 
+    showName: true, 
+    borderRadius: 12, 
+    transparentBg: false, 
+    offsetX: 0, 
+    offsetY: 0 
+});
             savePinnedSites(sites);
 
             urlInput.value = '';
@@ -1942,6 +2171,18 @@ body {
             renderPinnedSites();
         };
 
+                function moveSite(index, direction) {
+            const sites = getPinnedSites();
+            const newIndex = index + direction;
+            
+            if (newIndex < 0 || newIndex >= sites.length) return;
+            
+            [sites[index], sites[newIndex]] = [sites[newIndex], sites[index]];
+            
+            savePinnedSites(sites);
+            renderPinnedSites();
+        }
+                
         const updateSearchStyle = () => {
             const w = document.getElementById('slider-search-w').value;
             const h = document.getElementById('slider-search-h').value;
